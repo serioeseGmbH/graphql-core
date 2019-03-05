@@ -1,6 +1,7 @@
 import pytest
 import traceback
 
+from graphql.error import GraphQLError
 from graphql.execution import execute
 from graphql.language.parser import parse
 from graphql.type import GraphQLField, GraphQLObjectType, GraphQLSchema, GraphQLString
@@ -18,7 +19,7 @@ def test_raise():
 
     def resolver(context, *_):
         # type: (Optional[Any], *ResolveInfo) -> None
-        raise Exception("Failed")
+        raise GraphQLError("Failed")
 
     Type = GraphQLObjectType(
         "Type", {"a": GraphQLField(GraphQLString, resolver=resolver)}
@@ -34,14 +35,14 @@ def test_reraise():
 
     def resolver(context, *_):
         # type: (Optional[Any], *ResolveInfo) -> None
-        raise Exception("Failed")
+        raise GraphQLError("Failed")
 
     Type = GraphQLObjectType(
         "Type", {"a": GraphQLField(GraphQLString, resolver=resolver)}
     )
 
     result = execute(GraphQLSchema(Type), ast)
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(GraphQLError) as exc_info:
         result.errors[0].reraise()
 
     extracted = traceback.extract_tb(exc_info.tb)
@@ -58,7 +59,7 @@ def test_reraise():
             "return executor.execute(resolve_fn, source, info, **args)",
         ),
         ("execute", "return fn(*args, **kwargs)"),
-        ("resolver", 'raise Exception("Failed")'),
+        ("resolver", 'raise GraphQLError("Failed")'),
     ]
     # assert formatted_tb == [
     #     ('test_reraise', 'result.errors[0].reraise()'),
@@ -67,7 +68,7 @@ def test_reraise():
     #     # ('reraise', 'raise value.with_traceback(tb)'),
     #     # ('resolve_or_error', 'return executor.execute(resolve_fn, source, info, **args)'),
     #     # ('execute', 'return fn(*args, **kwargs)'),
-    #     ('resolver', "raise Exception('Failed')")
+    #     ('resolver', "raise GraphQLError('Failed')")
     # ]
 
     assert str(exc_info.value) == "Failed"

@@ -125,8 +125,10 @@ def execute(
 
     def on_rejected(error):
         # type: (Exception) -> None
-        exe_context.errors.append(error)
-        return None
+        if isinstance(error, GraphQLError):
+            exe_context.errors.append(error)
+            return None
+        return Promise.rejected(error)
 
     def on_resolve(data):
         # type: (Union[None, Dict, Observable]) -> Union[ExecutionResult, Observable]
@@ -267,9 +269,6 @@ def subscribe_fields(
 ):
     # type: (...) -> Observable
     subscriber_exe_context = SubscriberExecutionContext(exe_context)
-
-    def on_error(error):
-        subscriber_exe_context.report_error(error)
 
     def map_result(data):
         # type: (Dict[str, Any]) -> ExecutionResult
@@ -479,6 +478,8 @@ def complete_value_catching_error(
 
             def handle_error(error):
                 # type: (Union[GraphQLError, GraphQLLocatedError]) -> Optional[Any]
+                if not isinstance(error, GraphQLError):
+                    return Promise.rejected(error)
                 traceback = completed._traceback  # type: ignore
                 exe_context.report_error(error, traceback)
                 return None
@@ -486,7 +487,7 @@ def complete_value_catching_error(
             return completed.catch(handle_error)
 
         return completed
-    except Exception as e:
+    except GraphQLError as e:
         traceback = sys.exc_info()[2]
         exe_context.report_error(e, traceback)
         return None
@@ -528,12 +529,16 @@ def complete_value(
             ),
             lambda error: Promise.rejected(
                 GraphQLLocatedError(field_asts, original_error=error, path=path)
+                if isinstance(error, GraphQLError)
+                else error
             ),
         )
 
     # print return_type, type(result)
-    if isinstance(result, Exception):
+    if isinstance(result, GraphQLError):
         raise GraphQLLocatedError(field_asts, original_error=result, path=path)
+    if isinstance(result, Exception):
+        raise result
 
     if isinstance(return_type, GraphQLNonNull):
         return complete_nonnull_value(
